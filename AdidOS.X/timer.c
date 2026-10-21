@@ -11,6 +11,7 @@ extern volatile uint32_t os_ticks;
 
 void config_timer_0(void)
 {
+    T1CON = 0;
     T1CONbits.TCS = 0;          // Clock interno 
     T1CONbits.TCKPS = 1;        // Preescaler 1:8
     IFS0bits.T1IF = 0;          // Flag

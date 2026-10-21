@@ -9,7 +9,7 @@ extern uint16_t *task_running_tos;
 
 bool create_task(callback task, uint8_t prior);
 void init_stack(tcb_t *task);
-void os_config(void);
+bool os_config(void);
 void os_start_scheduler(void);
 
 void task_yield(void);
@@ -17,6 +17,8 @@ void task_delay(uint16_t time);
 void delay_release(void);
 uint32_t os_get_ticks(void);
 uint8_t task_get_priority(void);
+/* Interna: impede retorno antes de a interrupcao pendente despachar a tarefa. */
+void task_wait_for_dispatch(uint8_t task);
 
 TASK idle(void);
 

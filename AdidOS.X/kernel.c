@@ -13,7 +13,7 @@ uint8_t task_running = 0;
 uint16_t *task_running_tos = NULL;
 volatile uint32_t os_ticks = 0;
 
-void os_config(void)
+bool os_config(void)
 {
     /* Nenhuma interrupcao pode observar a fila parcialmente inicializada. */
     __builtin_disable_interrupts();
@@ -23,9 +23,8 @@ void os_config(void)
     config_timer_0();
     config_int0();
     os_heap_init();
-    config_user_app();
-    
-    create_task(idle, 0);
+    if (!create_task(idle, 0)) return false;
+    return config_user_app();
 }
 
 void os_start_scheduler(void)
@@ -90,17 +89,20 @@ void init_stack(tcb_t *task)
 
 void task_yield(void)
 {   
+    uint8_t self = task_running;
     irq_state_t state = os_irq_save();
 
     ReadyQueue.tasks[task_running].task_state = READY;
     CONTEXT_SWITCH();
 
     os_irq_restore(state);
+    task_wait_for_dispatch(self);
 }
 
 void task_delay(uint16_t time)
 {
     if (time == 0) { task_yield(); return; }
+    uint8_t self = task_running;
     irq_state_t state = os_irq_save();
     
     ReadyQueue.tasks[task_running].task_delay = time;
@@ -108,6 +110,15 @@ void task_delay(uint16_t time)
     CONTEXT_SWITCH();
     
     os_irq_restore(state);
+    task_wait_for_dispatch(self);
+}
+
+void task_wait_for_dispatch(uint8_t task)
+{
+    /* A leitura volatile tambem cobre a latencia entre restaurar IPL e entrar
+     * na ISR. Nao se pode continuar uma leitura de fila ainda bloqueada. */
+    volatile state_t *state = &ReadyQueue.tasks[task].task_state;
+    while (*state != RUNNING) Nop();
 }
 
 void delay_release(void)

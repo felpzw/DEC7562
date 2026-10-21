@@ -1,5 +1,6 @@
 #include "sync.h"
 #include "int.h"
+#include "kernel.h"
 #include <stddef.h>
 
 extern queue_t ReadyQueue;
@@ -14,14 +15,18 @@ void sem_init(sem_t *s, uint8_t value)
 
 void sem_wait(sem_t *s)
 {
+    uint8_t self = task_running;
     irq_state_t state = os_irq_save();
+    bool blocked = false;
     if (--s->sem_count < 0) {
+        blocked = true;
         s->sem_queue[s->s_queue_input] = task_running;
         s->s_queue_input = (s->s_queue_input + 1) % MAX_TASKS;
         ReadyQueue.tasks[task_running].task_state = BLOCKED;
         CONTEXT_SWITCH();
     }
     os_irq_restore(state);
+    if (blocked) task_wait_for_dispatch(self);
 }
 
 void sem_post(sem_t *s)
@@ -99,7 +104,8 @@ bool mutex_lock(mutex_t *m)
     os_irq_restore(state);
     /* A interrupcao suspende esta chamada; unlock transfere a posse antes
      * de tornar a tarefa READY. Ao retomar, ela ja possui o mutex. */
-    return m->owner == self;
+    task_wait_for_dispatch(self);
+    return true;
 }
 
 bool mutex_unlock(mutex_t *m)

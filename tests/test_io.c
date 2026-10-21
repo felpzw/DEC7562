@@ -24,6 +24,7 @@ static bool conversion_ok = true;
 irq_state_t os_irq_save(void) { irq_state_t old = masked; masked = 1; return old; }
 void os_irq_restore(irq_state_t state) { masked = state; }
 void os_host_context_switch(void) { assert(masked); }
+void task_wait_for_dispatch(uint8_t task) { (void)task; assert(!"bloqueio inesperado no teste de driver"); }
 void os_host_nop(void) { if (conversion_ok && AD1CON1bits.SAMP) AD1CON1bits.DONE = 1; }
 
 int main(void)

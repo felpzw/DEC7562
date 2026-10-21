@@ -3,7 +3,6 @@
 #include <xc.h>
 
 
-#define FCY 4000000UL
 
 
 void UART_init(uint32_t baudrate)
@@ -13,14 +12,14 @@ void UART_init(uint32_t baudrate)
     // Configura divisor do oscilador FRC para 1:1
     CLKDIVbits.RCDIV = 0;
 
-    // Desabilita UART1 durante a configuraÁ„o.
+    // Desabilita UART1 durante a configura√ß√£o.
     U1MODEbits.UARTEN = 0;
 
     // Reinicializa os registradores.
     U1MODE  = 0;
     U1STA   = 0;
 
-    // ConfiguraÁ„o: 8 bits, sem paridade, 1 stop bit.
+    // Configura√ß√£o: 8 bits, sem paridade, 1 stop bit.
     U1MODEbits.PDSEL = 0;
     U1MODEbits.STSEL = 0;
 
@@ -39,7 +38,7 @@ void UART_init(uint32_t baudrate)
 
 void UART_write_char(char c)
 {
-    // Aguarda espaÁo no buffer de transmiss„o
+    // Aguarda espa√ßo no buffer de transmiss√£o
     while (U1STAbits.UTXBF);
 
     U1TXREG = c;

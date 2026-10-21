@@ -46,7 +46,8 @@ extern volatile uartmode_reg_t test_uartmode;
 extern volatile uartsta_reg_t test_uartsta;
 extern volatile uint16_t OC1R, OC1RS, AD1CON2, AD1CSSL, AD1PCFG, TRISB, ADC1BUF0;
 extern volatile uint16_t U1BRG, U1TXREG;
-extern struct { unsigned RCDIV:3; } CLKDIVbits;
+typedef struct { unsigned RCDIV:3; } clkdiv_reg_t;
+extern clkdiv_reg_t CLKDIVbits;
 #define OC1CON test_oc.value
 #define OC1CONbits test_oc.bits
 #define AD1CON1 test_adc1.value

@@ -21,7 +21,7 @@ volatile enable_reg_t test_iec;
 volatile priority_reg_t test_ipc;
 volatile uint16_t TMR1, PR1, TMR2, PR2, TBLPAG, PSVPAG, CORCON;
 static irq_state_t masked;
-static bool pending, expect_block;
+static bool pending, expect_block, delayed;
 static unsigned switches;
 static jmp_buf blocked;
 static void (*resume_hook)(void);
@@ -31,7 +31,7 @@ void os_host_context_switch(void) { assert(masked); pending = true; }
 void os_irq_restore(irq_state_t state)
 {
     masked = state;
-    if (!masked && pending) {
+    if (!masked && pending && !delayed) {
         pending = false;
         ++switches;
         if (resume_hook != NULL) { void (*hook)(void) = resume_hook; resume_hook = NULL; hook(); }
@@ -39,14 +39,22 @@ void os_irq_restore(irq_state_t state)
             longjmp(blocked, 1);
     }
 }
-void os_host_nop(void) {}
-void config_user_app(void) {}
+void os_host_nop(void)
+{
+    if (pending && delayed && !masked) {
+        pending = false;
+        delayed = false;
+        _INT0Interrupt();
+    }
+}
+bool config_user_app(void) { return true; }
 static void task(void) {}
 
 static void setup(void)
 {
     memset(&ReadyQueue, 0, sizeof ReadyQueue);
     masked = pending = expect_block = false;
+    delayed = false;
     resume_hook = NULL;
     switches = 0;
     task_running = 0;
@@ -184,7 +192,11 @@ static void test_semaphore_and_ticks(void)
     running(3); _INT0Interrupt(); assert(ReadyQueue.tasks[3].task_state == READY);
     irq_state_t old = os_irq_save();
     sem_post(&semaphore); assert(masked); os_irq_restore(old); assert(!masked);
-    running(4); task_delay(0); assert(ReadyQueue.tasks[4].task_state == READY);
+    running(4); resume_hook = _INT0Interrupt;
+    task_delay(0); assert(ReadyQueue.tasks[4].task_state == RUNNING);
+    setup(); running(5); delayed = true;
+    task_yield();
+    assert(!delayed && ReadyQueue.tasks[5].task_state == RUNNING);
 }
 static m_queue_t queue;
 static void produce_message(void)

@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "RTOS: testes locais",
+      "type": "process",
+      "command": "make",
+      "args": ["test", "syntax"],
+      "options": { "cwd": "${workspaceFolder}/tests" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": {
+        "base": "$gcc",
+        "fileLocation": ["relative", "${workspaceFolder}/tests"]
+      }
+    },
+    {
+      "label": "RTOS: compilar PIC24 (XC16)",
+      "type": "process",
+      "command": "make",
+      "args": ["-f", "Makefile.pic24"],
+      "options": { "cwd": "${workspaceFolder}/AdidOS.X" },
+      "group": "build",
+      "problemMatcher": {
+        "base": "$gcc",
+        "fileLocation": ["relative", "${workspaceFolder}/AdidOS.X"]
+      }
+    },
+    {
+      "label": "RTOS: limpar testes",
+      "type": "process",
+      "command": "make",
+      "args": ["clean"],
+      "options": { "cwd": "${workspaceFolder}/tests" },
+      "problemMatcher": []
+    },
+    {
+      "label": "RTOS: limpar firmware",
+      "type": "process",
+      "command": "make",
+      "args": ["-f", "Makefile.pic24", "clean"],
+      "options": { "cwd": "${workspaceFolder}/AdidOS.X" },
+      "problemMatcher": []
+    }
+  ]
+}

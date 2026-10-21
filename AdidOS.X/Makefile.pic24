@@ -1,0 +1,31 @@
+# Build portavel, independente dos caminhos Windows em nbproject/.
+XC16_CC ?= xc16-gcc
+XC16_BIN2HEX ?= xc16-bin2hex
+DEVICE = 24FJ128GA010
+BUILD_DIR ?= build/primeiro-trabalho
+DIST_DIR ?= dist/primeiro-trabalho
+SOURCES = main.c kernel.c scheduler.c sync.c message.c mem.c timer.c int.c adc.c pwm.c uart.c user_app.c
+OBJECTS = $(SOURCES:%.c=$(BUILD_DIR)/%.o)
+DEPFILES = $(OBJECTS:.o=.d)
+DFP_FLAGS = $(if $(DFP_DIR),-mdfp="$(DFP_DIR)/xc16",)
+CFLAGS = -mcpu=$(DEVICE) -std=c99 -O0 -g -Wall -omf=elf -msmart-io=1 $(DFP_FLAGS)
+LDFLAGS = -Wl,--stack=128,--stackguard=16,--check-sections,--data-init,--pack-data,--handles,--isr,--no-gc-sections,--fill-upper=0,-Map=$(DIST_DIR)/AdidOS.map
+
+.PHONY: all clean
+all: $(DIST_DIR)/AdidOS.hex
+
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p "$(BUILD_DIR)"
+	$(XC16_CC) $(CFLAGS) -MMD -MP -c $< -o $@
+
+$(DIST_DIR)/AdidOS.elf: $(OBJECTS)
+	@mkdir -p "$(DIST_DIR)"
+	$(XC16_CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@
+
+$(DIST_DIR)/AdidOS.hex: $(DIST_DIR)/AdidOS.elf
+	$(XC16_BIN2HEX) $< -a -omf=elf $(DFP_FLAGS)
+
+clean:
+	rm -rf "$(BUILD_DIR)" "$(DIST_DIR)"
+
+-include $(DEPFILES)

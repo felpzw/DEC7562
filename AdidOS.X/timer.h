@@ -1,10 +1,10 @@
 #ifndef TIMER_H
 #define	TIMER_H
 
-#include <xc.h>
+#include "platform.h"
 
 void config_timer_0(void);
-void __attribute__ ((interrupt, no_auto_psv, naked)) _T1Interrupt(); 
+void OS_INTERRUPT _T1Interrupt(void);
 
 
 #endif	/* TIMER_H */

@@ -7,16 +7,23 @@
 extern uint16_t *task_running_tos;
 
 
-void create_task(callback task, uint8_t prior);
+bool create_task(callback task, uint8_t prior);
 void init_stack(tcb_t *task);
 void os_config(void);
 void os_start_scheduler(void);
 
-void task_yield();
-void task_delay();
-void delay_release();
+void task_yield(void);
+void task_delay(uint16_t time);
+void delay_release(void);
+uint32_t os_get_ticks(void);
+uint8_t task_get_priority(void);
 
-TASK idle();
+TASK idle(void);
+
+#ifdef OS_HOST_TEST
+#define SAVE_CONTEXT() ((void)0)
+#define RESTORE_CONTEXT() ((void)0)
+#else
 
 #define SAVE_CONTEXT() \
 do { \
@@ -71,5 +78,6 @@ do { \
   ); \
 } while(0)
 
+#endif /* OS_HOST_TEST */
 #endif	/* KERNEL_H */
 

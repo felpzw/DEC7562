@@ -5,41 +5,50 @@
 #include "int.h"
 #include <xc.h>
 #include "mem.h"
+#include "scheduler.h"
 
-// Variáveis globais
+// VariÃ¡veis globais
 queue_t ReadyQueue;
 uint8_t task_running = 0;
 uint16_t *task_running_tos = NULL;
+volatile uint32_t os_ticks = 0;
 
 void os_config(void)
 {
+    /* Nenhuma interrupcao pode observar a fila parcialmente inicializada. */
+    __builtin_disable_interrupts();
     ReadyQueue.queue_size   = 0;
+    task_running = 0;
+    os_ticks = 0;
     config_timer_0();
     config_int0();
+    os_heap_init();
     config_user_app();
     
-    #if DYNAMIC_ALLOCATION == ON
-    os_heap_init();
-    #endif
-    
-    create_task(idle, 4);
+    create_task(idle, 0);
 }
 
 void os_start_scheduler(void)
 {
-    task_running_tos = ReadyQueue.tasks[0].sp;    
+    __builtin_disable_interrupts();
+    task_running = scheduler();
+    ReadyQueue.tasks[task_running].task_state = RUNNING;
+    task_running_tos = ReadyQueue.tasks[task_running].sp;
     T1CONbits.TON = 1;
     RESTORE_CONTEXT();
 }
 
-void create_task(callback task, uint8_t prior)
+bool create_task(callback task, uint8_t prior)
 {
+    if (task == NULL || ReadyQueue.queue_size >= MAX_TASKS + 1) return false;
     tcb_t *new_task = &ReadyQueue.tasks[ReadyQueue.queue_size];
     
     // Preencher a tcb
     new_task->task_id       = ReadyQueue.queue_size+1;
     new_task->task_func     = task;
     new_task->task_prior    = prior;
+    new_task->base_prior    = prior;
+    new_task->waiting_mutex = NULL;
     new_task->task_state    = READY;
     new_task->task_delay    = 0;
     
@@ -51,6 +60,7 @@ void create_task(callback task, uint8_t prior)
     
     // Insere na fila de aptos    
     ReadyQueue.queue_size++;
+    return true;
 }
 
 void init_stack(tcb_t *task)
@@ -59,13 +69,13 @@ void init_stack(tcb_t *task)
     
     sp = task->sp;
     
-    pc_low  = (uint16_t)task->task_func;
+    pc_low  = (uint16_t)(uintptr_t)task->task_func;
     pc_high = 0x0000;
     
     *sp++ = pc_low;
     *sp++ = pc_high;
     
-    // Inicializar os Ws (W0 até W14)
+    // Inicializar os Ws (W0 atÃ© W14)
     for (int i = 0; i < 15; i++) {
         *sp++ = 0x0000;
     }
@@ -78,30 +88,29 @@ void init_stack(tcb_t *task)
     task->sp = sp;
 }
 
-void task_yield()
+void task_yield(void)
 {   
-    __builtin_disable_interrupts();
+    irq_state_t state = os_irq_save();
 
     ReadyQueue.tasks[task_running].task_state = READY;
     CONTEXT_SWITCH();
 
-    __builtin_enable_interrupts();
+    os_irq_restore(state);
 }
 
 void task_delay(uint16_t time)
 {
-    __builtin_disable_interrupts();
-    
-    //__builtin_disi(16383);
+    if (time == 0) { task_yield(); return; }
+    irq_state_t state = os_irq_save();
     
     ReadyQueue.tasks[task_running].task_delay = time;
     ReadyQueue.tasks[task_running].task_state = WAITING;
     CONTEXT_SWITCH();
     
-    __builtin_enable_interrupts();
+    os_irq_restore(state);
 }
 
-void delay_release()
+void delay_release(void)
 {
     for (int i = 0; i < ReadyQueue.queue_size; i++) {
         if (ReadyQueue.tasks[i].task_state == WAITING) {
@@ -115,10 +124,22 @@ void delay_release()
     }
 }
 
-TASK idle()
+uint32_t os_get_ticks(void)
+{
+    irq_state_t state = os_irq_save();
+    uint32_t ticks = os_ticks;
+    os_irq_restore(state);
+    return ticks;
+}
+
+uint8_t task_get_priority(void)
+{
+    return ReadyQueue.tasks[task_running].task_prior;
+}
+
+TASK idle(void)
 {
     while (1) {
-        asm("NOP");
         Nop();
     }
 }

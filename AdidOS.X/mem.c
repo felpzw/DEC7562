@@ -1,68 +1,78 @@
-#include "mem.h" 
-#include "os_config.h"
+#include "mem.h"
 #include "types.h"
-#include <stdio.h>
+#include "platform.h"
+#include <stddef.h>
 
-
-uint8_t heap_mem[HEAP_SIZE];
-
+static union {
+    block_info_t alignment;
+    uint8_t bytes[HEAP_SIZE];
+} heap;
+static bool initialized;
 
 void os_heap_init(void)
 {
-    block_info_t *blk_info = (block_info_t *)heap_mem;
-
-    blk_info->size = HEAP_SIZE - sizeof(block_info_t);
-    blk_info->free = 1;
+    block_info_t *first = (block_info_t *)heap.bytes;
+    first->data.size = (HEAP_SIZE / sizeof(block_info_t) - 1) * sizeof(block_info_t);
+    first->data.free = 1;
+    initialized = true;
 }
 
 void *os_malloc(uint16_t nr_bytes)
 {
-    uint8_t *heap_ptr   = heap_mem;
-    uint8_t *heap_end   = heap_mem + HEAP_SIZE;
-
-    if (nr_bytes == 0)
+    uint16_t offset = 0;
+    uint16_t aligned;
+    irq_state_t state;
+    void *result = NULL;
+    if (!initialized || nr_bytes == 0 || nr_bytes > HEAP_SIZE - sizeof(block_info_t))
         return NULL;
-
-    while (heap_ptr + sizeof(block_info_t) <= heap_end) {
-
-        block_info_t *blk_info = (block_info_t *)heap_ptr;
-
-        // Verifica se o bloco é grande o suficiente para a nova alocação
-        if (blk_info->free && blk_info->size >= nr_bytes) {
-
-            uint16_t remaining = blk_info->size - nr_bytes;
-
-            // Verifica se é possível criar um novo bloco
-            if (remaining > sizeof(block_info_t)) {
-
-                block_info_t *new_blk_info = (block_info_t *)(heap_ptr + sizeof(block_info_t) + nr_bytes);
-                new_blk_info->size = remaining - sizeof(block_info_t);
-                new_blk_info->free = 1;
-
-                blk_info->size = nr_bytes;
+    aligned = ((nr_bytes + sizeof(block_info_t) - 1) / sizeof(block_info_t)) * sizeof(block_info_t);
+    state = os_irq_save();
+    while (offset + sizeof(block_info_t) <= HEAP_SIZE) {
+        block_info_t *block = (block_info_t *)(heap.bytes + offset);
+        if (block->data.free && block->data.size >= aligned) {
+            uint16_t remaining = block->data.size - aligned;
+            if (remaining >= 2 * sizeof(block_info_t)) {
+                block_info_t *next = (block_info_t *)(heap.bytes + offset + sizeof(block_info_t) + aligned);
+                next->data.size = remaining - sizeof(block_info_t);
+                next->data.free = 1;
+                block->data.size = aligned;
             }
-
-            // Marca o bloco como ocupado
-            blk_info->free = 0;
-
-            // Retorna somente a área de dados
-            return heap_ptr + sizeof(block_info_t);
+            block->data.free = 0;
+            result = heap.bytes + offset + sizeof(block_info_t);
+            break;
         }
-
-        // Passa para o próximo bloco
-        heap_ptr += sizeof(block_info_t) + blk_info->size;
+        offset += sizeof(block_info_t) + block->data.size;
     }
-
-    // Não encontrou espaço
-    return NULL;
+    os_irq_restore(state);
+    return result;
 }
 
 void os_free(void *address)
 {
-    if (address == NULL)
-        return;
-
-    block_info_t *blk_info = (block_info_t *)((uint8_t *)address - sizeof(block_info_t));
-
-    blk_info->free = 1;
+    uint16_t offset = 0;
+    irq_state_t state;
+    if (!initialized || address == NULL) return;
+    state = os_irq_save();
+    /* Nao interpreta enderecos externos ou interiores como cabecalhos. */
+    while (offset + sizeof(block_info_t) <= HEAP_SIZE) {
+        block_info_t *block = (block_info_t *)(heap.bytes + offset);
+        if (heap.bytes + offset + sizeof(block_info_t) == address) {
+            block->data.free = 1;
+            break;
+        }
+        offset += sizeof(block_info_t) + block->data.size;
+    }
+    /* Une o anterior e todos os posteriores, sem atravessar blocos ocupados. */
+    offset = 0;
+    while (offset + sizeof(block_info_t) <= HEAP_SIZE) {
+        block_info_t *block = (block_info_t *)(heap.bytes + offset);
+        uint16_t next_offset = offset + sizeof(block_info_t) + block->data.size;
+        if (next_offset + sizeof(block_info_t) > HEAP_SIZE) break;
+        block_info_t *next = (block_info_t *)(heap.bytes + next_offset);
+        if (block->data.free && next->data.free)
+            block->data.size += sizeof(block_info_t) + next->data.size;
+        else
+            offset = next_offset;
+    }
+    os_irq_restore(state);
 }

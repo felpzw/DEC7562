@@ -3,9 +3,9 @@
 
 #include <stdint.h>
 
-uint8_t scheduler();
-uint8_t rr_scheduler();
-uint8_t prior_scheduler();
+uint8_t scheduler(void);
+uint8_t rr_scheduler(void);
+uint8_t prior_scheduler(void);
 
 
 #endif	/* SCHEDULER_H */

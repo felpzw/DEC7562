@@ -1,0 +1,10 @@
+# Executaveis e artefatos locais dos testes.
+tests/test_rtos
+tests/test_io
+tests/test_demo
+tests/*.dSYM/
+
+# Novos resultados de compilacao do MPLAB (os ja versionados sao historicos).
+**/build/
+**/dist/
+**/.generated_files/
